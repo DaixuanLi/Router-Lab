@@ -1,6 +1,8 @@
-#include "router.h"
+#include <arpa/inet.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include "router.h"
 
 /*
   RoutingTable Entry 的定义如下：
@@ -18,6 +20,10 @@
   你可以在全局变量中把路由表以一定的数据结构格式保存下来。
 */
 
+RoutingTableEntry table[200];
+int top = 0;
+bool hasEntry[200];
+
 /**
  * @brief 插入/删除一条路由表表项
  * @param insert 如果要插入则为 true ，要删除则为 false
@@ -28,6 +34,29 @@
  */
 void update(bool insert, RoutingTableEntry entry) {
   // TODO:
+  if (insert) {
+    for (int i = 0 ; i < top; ++i) {
+      if (hasEntry[i]) {
+        if ((entry.addr == table[i].addr) && (entry.len == table[i].len)) {
+          table[i] = entry;
+          return;
+        }
+      }
+    }
+    table[top] = entry;
+    hasEntry[top] = true;
+    ++top;
+  }
+  else {
+    for (int i = 0; i < top; ++i) {
+      if (hasEntry[i]) {
+        if ((entry.addr == table[i].addr) && (entry.len == table[i].len)) {
+          hasEntry[i] = 0;
+          return;
+        }
+      }
+    }
+  }
 }
 
 /**
@@ -39,7 +68,25 @@ void update(bool insert, RoutingTableEntry entry) {
  */
 bool query(uint32_t addr, uint32_t *nexthop, uint32_t *if_index) {
   // TODO:
-  *nexthop = 0;
-  *if_index = 0;
+  uint32_t max_len = 0;
+  bool found = false;
+  for (int i = 0; i < top; ++i) {
+    if (hasEntry[i]) {
+      uint32_t addr_l = ntohl(addr);
+      uint32_t table_addr_l = ntohl(table[i].addr);
+      uint32_t temp = addr_l ^ table_addr_l;
+      if (!(temp >> (32 - table[i].len))) {
+        if (table[i].len > max_len) {
+            *nexthop = table[i].nexthop;
+            *if_index = table[i].if_index;
+            max_len = table[i].len;
+            found = true;
+        }
+      }
+    }
+  }
+  if (found) {
+    return true;
+  }
   return false;
 }

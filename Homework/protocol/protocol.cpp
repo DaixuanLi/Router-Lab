@@ -1,6 +1,8 @@
+#include <arpa/inet.h>
 #include "rip.h"
 #include <stdint.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 /*
   在头文件 rip.h 中定义了如下的结构体：
@@ -43,9 +45,87 @@
  * Metric 转换成小端序后是否在 [1,16] 的区间内，
  * Mask 的二进制是不是连续的 1 与连续的 0 组成等等。
  */
+bool checkMask(uint32_t mask) {
+  while (0x80000000 & mask) {
+    mask <<= 1;
+  }
+  return mask == 0;
+}
+
+void makeEntry(RipEntry* pEntry, uint32_t addr, uint32_t mask, uint32_t nexthop, uint32_t metric) {
+  pEntry->addr = addr;
+  pEntry->mask = mask;
+  pEntry->nexthop = nexthop;
+  pEntry->metric = metric;
+}
+
 bool disassemble(const uint8_t *packet, uint32_t len, RipPacket *output) {
   // TODO:
-  return false;
+  uint8_t IHL = packet[0] & 0xf;
+  uint16_t totalLength = *((uint16_t*)(packet + 2));
+  if (ntohs(totalLength) > len) {
+    return false;
+  }
+
+  const uint8_t* ripHeader = packet + IHL * 4 + 8;
+  const uint16_t* ripHeader_16 = (uint16_t*)ripHeader;
+  uint8_t command = ripHeader[0];
+  uint8_t version = ripHeader[1];
+  uint16_t zero = ripHeader_16[1];
+  if ((version != 2) || (zero != 0)) {
+    return false;
+  }
+  if (command == 1) {
+    const uint16_t* data = ripHeader_16 + 2;
+    output->command = command;
+    output->numEntries = 1;
+    const uint32_t* data_32 = (uint32_t*) data;
+    uint16_t family = data[0];
+    uint16_t tag = data[1];
+    if (!(family == 0) || !(tag == 0)) {
+      return false;
+    }
+    uint32_t metric = data_32[4];
+    if (ntohl(metric) != 16) {
+      return false;
+    }
+    uint32_t mask = data_32[2];
+    if (!checkMask(ntohl(mask))) {
+      return false;
+    }
+    makeEntry(output->entries, data_32[1], mask, data_32[3], metric);
+  }
+  else if (command == 2) {
+    const uint16_t* data = ripHeader_16 + 2;
+    uint32_t length = IHL * 4 + 12;
+    output->command = command;
+    output->numEntries = 0;
+    while (length < ntohs(totalLength)) {
+      const uint32_t* data_32 = (uint32_t*) data;
+      uint16_t family = data[0];
+      uint16_t tag = data[1];
+      if (!(ntohs(family) == 2) || !(tag == 0)) {
+        return false;
+      }
+      uint32_t metric = data_32[4];
+      if ((ntohl(metric) < 1) || (ntohl(metric) > 16)) {
+        return false;
+      }
+      uint32_t mask = data_32[2];
+      if (!checkMask(ntohl(mask))) {
+        return false;
+      }
+      makeEntry(output->entries + output->numEntries, data_32[1], mask, data_32[3], metric);
+      data += 10;
+      length += 20;
+
+      output->numEntries++;
+    }
+  }
+  else {
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -60,5 +140,25 @@ bool disassemble(const uint8_t *packet, uint32_t len, RipPacket *output) {
  */
 uint32_t assemble(const RipPacket *rip, uint8_t *buffer) {
   // TODO:
-  return 0;
+  buffer[0] = rip->command;
+  buffer[1] = 2;
+  buffer[2] = buffer[3] = 0;
+  uint16_t* data = (uint16_t*)(buffer + 4);
+  for (int i = 0; i < rip->numEntries; ++i) {
+    if (rip->command == 1) {
+      data[0] = 0;
+    }
+    else {
+      data[0] = ntohs(2);
+    }
+    data[1] = 0;
+    uint32_t* data_32 = (uint32_t*)data;
+    data_32[1] = rip->entries[i].addr;
+    data_32[2] = rip->entries[i].mask;
+    data_32[3] = rip->entries[i].nexthop;
+    data_32[4] = rip->entries[i].metric;
+    data += 10;
+  }
+
+  return 4 + rip->numEntries * 20;
 }
