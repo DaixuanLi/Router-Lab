@@ -1,9 +1,9 @@
-#include "router_hal.h"
 #include "rip.h"
 #include "router.h"
+#include "router_hal.h"
 #include <stdint.h>
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <list>
 
@@ -51,7 +51,7 @@ int main(int argc, char *argv[])
     return res;
   }
 
-  // Add direct routes
+  // 0b. Add direct routes
   // For example:
   // 10.0.0.0/24 if 0
   // 10.0.1.0/24 if 1
@@ -121,10 +121,9 @@ int main(int argc, char *argv[])
     macaddr_t src_mac;
     macaddr_t dst_mac;
     int if_index;
-    res = HAL_ReceiveIPPacket(mask, packet, sizeof(packet), src_mac,
-                              dst_mac, 1000, &if_index);
-    if (res == HAL_ERR_EOF)
-    {
+    res = HAL_ReceiveIPPacket(mask, packet, sizeof(packet), src_mac, dst_mac,
+                              1000, &if_index);
+    if (res == HAL_ERR_EOF) {
       break;
     }
     else if (res < 0)
@@ -142,26 +141,25 @@ int main(int argc, char *argv[])
       continue;
     }
 
-    if (!validateIPChecksum(packet, res))
-    {
+    // 1. validate
+    if (!validateIPChecksum(packet, res)) {
       printf("Invalid IP Checksum\n");
       continue;
     }
     in_addr_t src_addr, dst_addr;
     // extract src_addr and dst_addr from packet
     // big endian
-    src_addr = 
+    src_addr = ;
 
+    // 2. check whether dst is me
     bool dst_is_me = false;
-    for (int i = 0; i < N_IFACE_ON_BOARD; i++)
-    {
-      if (memcmp(&dst_addr, &addrs[i], sizeof(in_addr_t)) == 0)
-      {
+    for (int i = 0; i < N_IFACE_ON_BOARD; i++) {
+      if (memcmp(&dst_addr, &addrs[i], sizeof(in_addr_t)) == 0) {
         dst_is_me = true;
         break;
       }
     }
-    // TODO: Handle rip multicast address?
+    // TODO: Handle rip multicast address(224.0.0.9)?
 
     if (dst_is_me)
     {
@@ -251,11 +249,13 @@ int main(int argc, char *argv[])
         else
         {
           // not found
+          // you can drop it
+          printf("ARP not found for %x\n", nexthop);
         }
-      }
-      else
-      {
+      } else {
         // not found
+        // optionally you can send ICMP Host Unreachable
+        printf("IP not found for %x\n", src_addr);
       }
     }
   }
