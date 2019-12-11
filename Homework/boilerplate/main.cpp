@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <iostream>
 
 extern bool validateIPChecksum(uint8_t *packet, size_t len);
 extern void update(bool insert, RoutingTableEntry entry);
@@ -25,10 +26,36 @@ uint8_t output[2048];
 // 2: 10.0.2.1
 // 3: 10.0.3.1
 // 你可以按需进行修改，注意端序
-in_addr_t addrs[N_IFACE_ON_BOARD] = {0x0100000a, 0x0101000a, 0x0102000a,
+in_addr_t addrs[N_IFACE_ON_BOARD] = {0x0203a8c0, 0x0104a8c0, 0x0102000a,
                                      0x0103000a};
 in_addr_t multi_addr = 0x090000e0;
 macaddr_t multi_mac = {0x09, 0x00, 0x00, 0x5e, 0x00, 0x01}; //01 : 00 : 5e : 00 : 00 : 09
+
+void print_addr(uint32_t addr) {
+    uint32_t temp = ntohl(addr);
+    std::cout << ((temp & 0xff000000) >> 24) << "."
+              << ((temp & 0x00ff0000) >> 16) << "."
+              << ((temp & 0x0000ff00) >> 8) << "." << ((temp & 0x000000ff));
+}
+
+void print_table() {
+  for (int i = 0; i < top; ++i) {
+    if (hasEntry[i]) {
+      if (table[i].nexthop == 0) {
+        print_addr(table[i].addr);
+        std::cout << "/" << table[i].len << " " 
+                  << table[i].if_index << " " 
+                  << "scope link" << std::endl; 
+      }
+      else {
+        print_addr(table[i].addr);
+        std::cout << " via ";
+        print_addr(table[i].nexthop); 
+        std::cout << " dev " << table[i].if_index << std::endl;
+      }
+    }
+  }
+}
 
 size_t build_rip_packet(in_addr_t src_addr, in_addr_t dst_addr, RipPacket *rip_packet) {
     // rip
@@ -95,8 +122,7 @@ void fill_resp(RipPacket* rip_packet) {
         if (hasEntry[i]) {
             rip_packet->entries[entry_num].addr = table[i].addr;
             rip_packet->entries[entry_num].mask = len2mask(table[i].len);
-            rip_packet->entries[entry_num].metric =
-                len2mask(htonl(table[i].metric));
+            rip_packet->entries[entry_num].metric = len2mask(htonl(table[i].metric));
             rip_packet->entries[entry_num].nexthop = table[i].nexthop;
             entry_num++;
         }
@@ -148,11 +174,13 @@ int main(int argc, char *argv[]) {
         .len = 24,        // small endian
         .if_index = i,    // small endian
         .nexthop = 0,      // big endian, means direct
-        .metric = 0,      //small endian
+        .metric = 1,      //small endian
         .timestemp = 0,   //small endian
     };
     update(true, entry);
   }
+  std::cout << "Routing Table Init" << std::endl;
+  print_table();
 
   uint64_t last_time = 0;
   while (1) {
@@ -282,6 +310,8 @@ int main(int argc, char *argv[]) {
               if (query(rip.entries[i].addr, &route_nexthop, &route_if_index, &route_metric)) {
                 if (route_nexthop == rip.entries[i].nexthop) {
                   update(false, route_entry);
+                  std::cout << "Routing Table Delete Entry" << std::endl;
+                  print_table();
                 }
               }
               //didn't send the invalid packet
@@ -292,10 +322,12 @@ int main(int argc, char *argv[]) {
                 //has route
                 if (new_metric <= route_metric) {
                   update(true, route_entry);
+                  std::cout << "Routing Table Update Entry" << std::endl;
                 }
               }
               else {
                 //no route
+                std::cout << "Routing Table Insert Entry" << std::endl;
                 update(true, route_entry);
               }
             }
