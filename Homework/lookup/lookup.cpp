@@ -91,3 +91,15 @@ bool query(uint32_t addr, uint32_t *nexthop, uint32_t *if_index, uint32_t *metri
   }
   return false;
 }
+
+bool if_exist(uint32_t addr, uint32_t len, uint32_t *nexthop, uint32_t *if_index, uint32_t *metric) {
+    // TODO:
+    for (int i = 0; i < top; ++i) {
+      if (hasEntry[i]) {
+        if ((addr == table[i].addr) && (len == table[i].len)) {
+          return true;
+        }
+      }
+    }
+    return false;
+}
