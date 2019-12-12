@@ -26,5 +26,7 @@ bool validateIPChecksum(uint8_t *packet, size_t len) {
         checkSum += high;
     }
 
+    *pCheckSum = realCheckSum;
+
   return ((uint16_t)(~checkSum)) == realCheckSum;
 }
