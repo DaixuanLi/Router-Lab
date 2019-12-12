@@ -206,7 +206,7 @@ int main(int argc, char *argv[]) {
         size_t length = build_rip_packet(addrs[index], multi_addr, &rip_packet);
         HAL_SendIPPacket(index, output, length, multi_mac);
       }
-
+      print_table();
       printf("5s Timer\n");
       last_time = time;
     }
@@ -314,7 +314,7 @@ int main(int argc, char *argv[]) {
             };
             // std::cout << "receive response" << std::endl;
             // print_addr(rip.entries[i].addr);
-            std::cout << " metric: " << new_metric << std::endl;
+            // std::cout << " metric: " << new_metric << std::endl;
             if (new_metric > 16) {
               //meric 较大
               //delete this route
@@ -323,9 +323,9 @@ int main(int argc, char *argv[]) {
                 //路由存在
                 if ((route_if_index == if_index) && (route_nexthop != 0)) {
                   //同一网口且不是直连路由
-                  update(false, route_entry);
                   std::cout << "Routing Table Delete Entry" << std::endl;
-                  print_table();
+                  update(false, route_entry);
+                  // print_table();
                 }
               }
               //didn't send the invalid packet
@@ -333,21 +333,21 @@ int main(int argc, char *argv[]) {
             else {
               //meric 没有超过16
               uint32_t route_nexthop, route_if_index, route_metric;
-              std::cout << "may be update" << std::endl;
+              // std::cout << "may be update" << std::endl;
               if (query(rip.entries[i].addr, &route_nexthop, &route_if_index, &route_metric)) {
                 //路由存在
                 if (route_if_index == if_index) {
                     //同一网口则不管新路由好坏都更新
                     std::cout << "Routing Table Update Entry" << std::endl;
                     update(true, route_entry);
-                    print_table();
+                    // print_table();
                 }
                 else {
                     if (new_metric <= route_metric) {
                         //如果不是同一网口则只有好路由才更新
                         std::cout << "Routing Table Update Entry" << std::endl;
                         update(true, route_entry);
-                        print_table();
+                        // print_table();
                     }
                 }
               }
@@ -355,7 +355,7 @@ int main(int argc, char *argv[]) {
                 //no route
                 std::cout << "Routing Table Insert Entry" << std::endl;
                 update(true, route_entry);
-                print_table();
+                // print_table();
               }
             }
           }
@@ -371,14 +371,14 @@ int main(int argc, char *argv[]) {
         std::cout << "valid failed" << std::endl; 
       }
     } else {
-      std::cout << "forward" << std::endl;
+      // std::cout << "forward" << std::endl;
       // 3b.1 dst is not me
       // forward
       // beware of endianness
       uint32_t nexthop, dest_if, metric;
       if (query(dst_addr, &nexthop, &dest_if, &metric)) {
         // found
-        std::cout << "found" << ": ";
+        std::cout << "Forward ";
         print_addr(nexthop);
         std::cout << " dest_if: " << dest_if << std::endl;
         macaddr_t dest_mac;
@@ -388,7 +388,7 @@ int main(int argc, char *argv[]) {
         }
         if (HAL_ArpGetMacAddress(dest_if, nexthop, dest_mac) == 0) {
           // found
-          std::cout << "found mac" << std::endl;
+          // std::cout << "found mac" << std::endl;
           memcpy(output, packet, res);
           // update ttl and checksum
           forward(output, res);
