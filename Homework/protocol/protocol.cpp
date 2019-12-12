@@ -274,6 +274,3 @@ uint32_t assemble(const RipPacket *rip, uint8_t *buffer)
   }
   return 20 * (rip->numEntries) + 4;
 }
-
-
-uint32_t generateIP_UDPHead(uint8_t *buffer,)
