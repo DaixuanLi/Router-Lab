@@ -9,29 +9,24 @@
  * @return 校验和无误则返回 true ，有误则返回 false
  */
 
-uint16_t big2little(uint16_t x) {
-    uint16_t result = 0;
-    result |= (x << 8);
-    result |= (x >> 8);
-    return result;
-}
-
 bool validateIPChecksum(uint8_t *packet, size_t len) {
     // TODO:
     uint32_t checkSum = 0;
     uint16_t* pCheckSum = (uint16_t*)(packet + 10);
-    uint16_t realCheckSum = big2little(*pCheckSum);
+    uint16_t realCheckSum = *pCheckSum;
     *pCheckSum = 0;
     uint8_t IHL = (packet[0] & 0xf) * 2;
     uint16_t* p = (uint16_t*)packet;
     for (int i = 0; i < IHL; ++i, ++p) {
-        checkSum += big2little(*p);
+        checkSum += *p;
     }
     while (checkSum >> 16) {
         uint32_t high = (checkSum >> 16);
         checkSum &= 0xffff;
         checkSum += high;
     }
+
+    *pCheckSum = realCheckSum;
 
   return ((uint16_t)(~checkSum)) == realCheckSum;
 }

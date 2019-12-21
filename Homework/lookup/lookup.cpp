@@ -66,7 +66,7 @@ void update(bool insert, RoutingTableEntry entry) {
  * @param if_index 如果查询到目标，把表项的 if_index 写入
  * @return 查到则返回 true ，没查到则返回 false
  */
-bool query(uint32_t addr, uint32_t *nexthop, uint32_t *if_index) {
+bool query(uint32_t addr, uint32_t *nexthop, uint32_t *if_index, uint32_t *metric) {
   // TODO:
   uint32_t max_len = 0;
   bool found = false;
@@ -79,6 +79,7 @@ bool query(uint32_t addr, uint32_t *nexthop, uint32_t *if_index) {
         if (table[i].len > max_len) {
             *nexthop = table[i].nexthop;
             *if_index = table[i].if_index;
+            *metric = table[i].metric;
             max_len = table[i].len;
             found = true;
         }
@@ -89,4 +90,16 @@ bool query(uint32_t addr, uint32_t *nexthop, uint32_t *if_index) {
     return true;
   }
   return false;
+}
+
+bool if_exist(uint32_t addr, uint32_t len, uint32_t *nexthop, uint32_t *if_index, uint32_t *metric) {
+    // TODO:
+    for (int i = 0; i < top; ++i) {
+      if (hasEntry[i]) {
+        if ((addr == table[i].addr) && (len == table[i].len)) {
+          return true;
+        }
+      }
+    }
+    return false;
 }

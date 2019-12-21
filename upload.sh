@@ -1,0 +1,1 @@
+rsync -avzP ./* pi:~/GuYuxian/ROUTER-LAB/
