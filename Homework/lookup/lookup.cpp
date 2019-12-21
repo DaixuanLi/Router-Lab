@@ -2,6 +2,9 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <map>
+#include <utility>
+#include <iostream>
 #include "router.h"
 
 /*
@@ -20,9 +23,10 @@
   你可以在全局变量中把路由表以一定的数据结构格式保存下来。
 */
 
-RoutingTableEntry table[200];
+MapTable map_table;
+RoutingTableEntry table[6000];
 int top = 0;
-bool hasEntry[200];
+bool hasEntry[6000];
 
 /**
  * @brief 插入/删除一条路由表表项
@@ -32,7 +36,57 @@ bool hasEntry[200];
  * 插入时如果已经存在一条 addr 和 len 都相同的表项，则替换掉原有的。
  * 删除时按照 addr 和 len 匹配。
  */
-void update(bool insert, RoutingTableEntry entry) {
+
+void print_addr(uint32_t addr) {
+    uint32_t temp = ntohl(addr);
+    std::cout << ((temp & 0xff000000) >> 24) << "."
+              << ((temp & 0x00ff0000) >> 16) << "."
+              << ((temp & 0x0000ff00) >> 8) << "." << ((temp & 0x000000ff));
+}
+
+void print_table() {
+  std::cout << "*****************************" << std::endl;
+  for (int i = 0; i < top; ++i) {
+    if (hasEntry[i]) {
+      if (table[i].nexthop == 0) {
+        print_addr(table[i].addr);
+        std::cout << "/" << table[i].len << " " 
+                  << table[i].if_index << " " 
+                  << "scope link metric " << table[i].metric << std::endl; 
+      }
+      else {
+        print_addr(table[i].addr);
+        std::cout << " via ";
+        print_addr(table[i].nexthop); 
+        std::cout << " dev " << table[i].if_index << " " << "metric " << table[i].metric << std::endl;
+      }
+    }
+  }
+  std::cout << "*****************************" << std::endl;
+}
+
+void print_table2() {
+  std::cout << "*****************************" << std::endl;
+  for (MapTable::iterator it = map_table.begin(); it != map_table.end(); ++it) {
+    RoutingTableEntry entry = it->second;
+    if (entry.nexthop == 0) {
+      print_addr(entry.addr);
+      std::cout << "/" << entry.len << " " 
+                << entry.if_index << " " 
+                << "scope link metric " << entry.metric << std::endl; 
+    }
+    else {
+      print_addr(entry.addr);
+      std::cout << " via ";
+      print_addr(entry.nexthop); 
+      std::cout << " dev " << entry.if_index << " " << "metric " << entry.metric << std::endl;
+    }
+  }
+  std::cout << "*****************************" << std::endl;
+}
+
+
+void update(bool insert, RoutingTableEntry &entry) {
   // TODO:
   if (insert) {
     for (int i = 0 ; i < top; ++i) {
@@ -56,6 +110,12 @@ void update(bool insert, RoutingTableEntry entry) {
         }
       }
     }
+  }
+}
+
+void update_2(bool insert, RoutingTableEntry &entry) {
+  if (insert) {
+    map_table[Key(ntohl(entry.addr), entry.len)] = entry;
   }
 }
 
@@ -92,6 +152,24 @@ bool query(uint32_t addr, uint32_t *nexthop, uint32_t *if_index, uint32_t *metri
   return false;
 }
 
+bool query2(uint32_t addr, uint32_t *nexthop, uint32_t *if_index, uint32_t *metric) {
+  uint32_t addr_h = ntohl(addr);
+  uint32_t mask_h = 0xffffffff;
+  uint32_t len = 32;
+  while (len >= 0) {
+    uint32_t tmp = addr_h & mask_h;
+    MapTable::iterator iter = map_table.find(Key(tmp, len));
+    if (iter != map_table.end()) {
+      *nexthop = iter->second.nexthop;
+      *if_index = iter->second.if_index;
+      *metric = iter->second.metric;
+      return true;
+    }
+  }
+  return false;
+}
+
+
 bool if_exist(uint32_t addr, uint32_t len, uint32_t *nexthop, uint32_t *if_index, uint32_t *metric) {
     // TODO:
     for (int i = 0; i < top; ++i) {
@@ -102,4 +180,11 @@ bool if_exist(uint32_t addr, uint32_t len, uint32_t *nexthop, uint32_t *if_index
       }
     }
     return false;
+}
+
+bool if_exist2(uint32_t addr, uint32_t len, uint32_t *nexthop, uint32_t *if_index, uint32_t *metric) {
+  if (map_table.count(Key(ntohl(addr), len)) > 0) {
+    return true;
+  }
+  return false;
 }

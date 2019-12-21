@@ -10,3 +10,6 @@ typedef struct {
     uint32_t timestemp;
     // 为了实现 RIP 协议，需要在这里添加额外的字段
 } RoutingTableEntry;
+
+typedef std::pair<uint32_t, uint32_t> Key;
+typedef std::map<Key, RoutingTableEntry> MapTable;
