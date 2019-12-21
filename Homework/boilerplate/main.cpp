@@ -130,27 +130,33 @@ uint32_t mask2len(uint32_t mask) {
     return len;
 }
 
-void fill_resp(RipPacket* rip_packet, uint32_t if_index) {
+int fill_resp(RipPacket* rip_packet, uint32_t if_index) {
+    int num_rip = 0;
     int entry_num = 0;
     for (int i = 0; i < top; ++i) {
         if (hasEntry[i]) {
           if (if_index != table[i].if_index) {
             //水平分割
-              // print_addr(table[i].addr);
-              // std::cout << std::endl;
-              // std::cout << table[i].len << std::endl;
-              // print_addr(len2mask(table[i].len));
-              // std::cout << std::endl;
-              rip_packet->entries[entry_num].addr = table[i].addr;
-              rip_packet->entries[entry_num].mask = htonl(len2mask(table[i].len));
-              rip_packet->entries[entry_num].metric = htonl(table[i].metric);
-              rip_packet->entries[entry_num].nexthop = table[i].nexthop;
+              rip_packet[num_rip].entries[entry_num].addr = table[i].addr;
+              rip_packet[num_rip].entries[entry_num].mask = htonl(len2mask(table[i].len));
+              rip_packet[num_rip].entries[entry_num].metric = htonl(table[i].metric);
+              rip_packet[num_rip].entries[entry_num].nexthop = table[i].nexthop;
               entry_num++;
+          }
+          if (entry_num >= 25) {
+            rip_packet[num_rip].command = 0x2;  // response
+            rip_packet[num_rip].numEntries = entry_num;
+            entry_num = 0;
+            num_rip++;
           }
         }
     }
-    rip_packet->command = 0x2;  // response
-    rip_packet->numEntries = entry_num;
+    if (entry_num > 0) {
+        rip_packet[num_rip].command = 0x2;  // response
+        rip_packet[num_rip].numEntries = entry_num;
+        num_rip++;
+    }
+    return num_rip;
 }
 
 bool in_same_sub_net(uint32_t addr, uint32_t more_addr, uint32_t len) {
@@ -191,6 +197,7 @@ int main(int argc, char *argv[]) {
   print_table();
 
   uint64_t last_time = 0;
+  RipPacket rip_packet[300];
   while (1) {
     uint64_t time = HAL_GetTicks();
     if (time > last_time + 5 * 1000) {
@@ -200,11 +207,12 @@ int main(int argc, char *argv[]) {
       // multicast MAC for 224.0.0.9 is 01:00:5e:00:00:09
 
       //build rip packet
-      RipPacket rip_packet;
       for (int index = 0; index < N_IFACE_ON_BOARD; ++index) {
-        fill_resp(&rip_packet, index);
-        size_t length = build_rip_packet(addrs[index], multi_addr, &rip_packet);
-        HAL_SendIPPacket(index, output, length, multi_mac);
+        int num_rip = fill_resp(rip_packet, index);
+        for (int rip_i = 0; rip_i < num_rip; ++rip_i) {
+          size_t length = build_rip_packet(addrs[index], multi_addr, &rip_packet[rip_i]);
+          HAL_SendIPPacket(index, output, length, multi_mac);
+        }
       }
       print_table();
       printf("5s Timer\n");
@@ -266,41 +274,13 @@ int main(int argc, char *argv[]) {
           // 3a.3 request, ref. RFC2453 Section 3.9.1
           // only need to respond to whole table requests in the lab
 
-          RipPacket resp;
-          // TODO: fill resp
-          fill_resp(&resp, if_index);
-          // int entry_num = 0;
-          // for (int i = 0; i < top; ++i) {
-          //     if (hasEntry[i]) {
-          //       if (!in_same_sub_net(src_addr, table[i].addr, table[i].len)) {
-          //         resp.entries[entry_num].addr = table[i].addr;
-          //         resp.entries[entry_num].mask = htonl(len2mask(table[i].len));
-          //         resp.entries[entry_num].metric = htonl(table[i].metric);
-          //         resp.entries[entry_num].nexthop = table[i].nexthop;
-          //         entry_num++;
-          //       }
-          //     }
-          // }
-          // resp.command = 0x2;  // response
-          // resp.numEntries = entry_num;
+          RipPacket resp[300];
+          int num_rip = fill_resp(resp, if_index);
+          for (int rip_i = 0; rip_i < num_rip; ++rip_i) {
+            size_t length = build_rip_packet(dst_addr, src_addr, &resp[rip_i]);
+            HAL_SendIPPacket(if_index, output, length, src_mac);
+          }
 
-          size_t length = build_rip_packet(dst_addr, src_addr, &resp);
-          // assemble
-          // IP
-          // output[0] = 0x45;
-          // ...
-          // UDP
-          // port = 520
-          // output[20] = 0x02;
-          // output[21] = 0x08;
-          // ...
-          // RIP
-          // uint32_t rip_len = assemble(&resp, &output[20 + 8]);
-          // checksum calculation for ip and udp
-          // if you don't want to calculate udp checksum, set it to zero
-
-          // send it back
-          HAL_SendIPPacket(if_index, output, length, src_mac);
         } else {
           // 3a.2 response, ref. RFC2453 3.9.2
           for (int i = 0; i < rip.numEntries; ++i) {
@@ -314,9 +294,6 @@ int main(int argc, char *argv[]) {
               .metric = new_metric,
               .timestemp = 0,
             };
-            // std::cout << "receive response" << std::endl;
-            // print_addr(rip.entries[i].addr);
-            // std::cout << " metric: " << new_metric << std::endl;
             if (new_metric > 16) {
               //meric 较大
               //delete this route
@@ -327,7 +304,6 @@ int main(int argc, char *argv[]) {
                   //同一网口且不是直连路由
                   std::cout << "Routing Table Delete Entry" << std::endl;
                   update(false, route_entry);
-                  // print_table();
                 }
               }
               //didn't send the invalid packet
@@ -335,21 +311,18 @@ int main(int argc, char *argv[]) {
             else {
               //meric 没有超过16
               uint32_t route_nexthop, route_if_index, route_metric;
-              // std::cout << "may be update" << std::endl;
               if (query(rip.entries[i].addr, &route_nexthop, &route_if_index, &route_metric)) {
                 //路由存在
                 if (route_if_index == if_index) {
                     //同一网口则不管新路由好坏都更新
                     std::cout << "Routing Table Update Entry" << std::endl;
                     update(true, route_entry);
-                    // print_table();
                 }
                 else {
                     if (new_metric <= route_metric) {
                         //如果不是同一网口则只有好路由才更新
                         std::cout << "Routing Table Update Entry" << std::endl;
                         update(true, route_entry);
-                        // print_table();
                     }
                 }
               }
@@ -357,33 +330,20 @@ int main(int argc, char *argv[]) {
                 //no route
                 std::cout << "Routing Table Insert Entry" << std::endl;
                 update(true, route_entry);
-                // print_table();
               }
             }
           }
-          // update routing table
-          // new metric = ?
-          // update metric, if_index, nexthop
-          // HINT: handle nexthop = 0 case
-          // HINT: what is missing from RoutingTableEntry?
-          // you might want to use `query` and `update` but beware of the difference between exact match and longest prefix match
-          // optional: triggered updates? ref. RFC2453 3.10.1
         }
       }
       else {
         std::cout << "valid failed" << std::endl; 
       }
     } else {
-      // std::cout << "forward" << std::endl;
-      // 3b.1 dst is not me
       // forward
       // beware of endianness
       uint32_t nexthop, dest_if, metric;
       if (query(dst_addr, &nexthop, &dest_if, &metric)) {
         // found
-        std::cout << "Forward ";
-        print_addr(nexthop);
-        std::cout << " dest_if: " << dest_if << std::endl;
         macaddr_t dest_mac;
         // direct routing
         if (nexthop == 0) {
@@ -391,7 +351,6 @@ int main(int argc, char *argv[]) {
         }
         if (HAL_ArpGetMacAddress(dest_if, nexthop, dest_mac) == 0) {
           // found
-          // std::cout << "found mac" << std::endl;
           memcpy(output, packet, res);
           // update ttl and checksum
           forward(output, res);
