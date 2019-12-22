@@ -86,7 +86,7 @@ void print_table2() {
 }
 
 
-void update(bool insert, RoutingTableEntry &entry) {
+void update2(bool insert, RoutingTableEntry &entry) {
   // TODO:
   if (insert) {
     for (int i = 0 ; i < top; ++i) {
@@ -113,9 +113,12 @@ void update(bool insert, RoutingTableEntry &entry) {
   }
 }
 
-void update_2(bool insert, RoutingTableEntry &entry) {
+void update(bool insert, RoutingTableEntry &entry) {
   if (insert) {
     map_table[Key(ntohl(entry.addr), entry.len)] = entry;
+  } 
+  else {
+    map_table.erase(Key(ntohl(entry.addr), entry.len));
   }
 }
 
@@ -126,7 +129,7 @@ void update_2(bool insert, RoutingTableEntry &entry) {
  * @param if_index 如果查询到目标，把表项的 if_index 写入
  * @return 查到则返回 true ，没查到则返回 false
  */
-bool query(uint32_t addr, uint32_t *nexthop, uint32_t *if_index, uint32_t *metric) {
+bool query2(uint32_t addr, uint32_t *nexthop, uint32_t *if_index, uint32_t *metric) {
   // TODO:
   uint32_t max_len = 0;
   bool found = false;
@@ -152,10 +155,10 @@ bool query(uint32_t addr, uint32_t *nexthop, uint32_t *if_index, uint32_t *metri
   return false;
 }
 
-bool query2(uint32_t addr, uint32_t *nexthop, uint32_t *if_index, uint32_t *metric) {
+bool query(uint32_t addr, uint32_t *nexthop, uint32_t *if_index, uint32_t *metric) {
   uint32_t addr_h = ntohl(addr);
   uint32_t mask_h = 0xffffffff;
-  uint32_t len = 32;
+  int len = 32;
   while (len >= 0) {
     uint32_t tmp = addr_h & mask_h;
     MapTable::iterator iter = map_table.find(Key(tmp, len));
@@ -165,12 +168,14 @@ bool query2(uint32_t addr, uint32_t *nexthop, uint32_t *if_index, uint32_t *metr
       *metric = iter->second.metric;
       return true;
     }
+    --len;
+    mask_h <<= 1;
   }
   return false;
 }
 
 
-bool if_exist(uint32_t addr, uint32_t len, uint32_t *nexthop, uint32_t *if_index, uint32_t *metric) {
+bool if_exist2(uint32_t addr, uint32_t len, uint32_t *nexthop, uint32_t *if_index, uint32_t *metric) {
     // TODO:
     for (int i = 0; i < top; ++i) {
       if (hasEntry[i]) {
@@ -182,7 +187,7 @@ bool if_exist(uint32_t addr, uint32_t len, uint32_t *nexthop, uint32_t *if_index
     return false;
 }
 
-bool if_exist2(uint32_t addr, uint32_t len, uint32_t *nexthop, uint32_t *if_index, uint32_t *metric) {
+bool if_exist(uint32_t addr, uint32_t len, uint32_t *nexthop, uint32_t *if_index, uint32_t *metric) {
   if (map_table.count(Key(ntohl(addr), len)) > 0) {
     return true;
   }
