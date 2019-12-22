@@ -1,6 +1,6 @@
 #include <stdint.h>
 #include <stdlib.h>
-
+#include <iostream>
 /**
  * @brief 进行转发时所需的 IP 头的更新：
  *        你需要先检查 IP 头校验和的正确性，如果不正确，直接返回 false ；
@@ -12,5 +12,50 @@
  */
 bool forward(uint8_t *packet, size_t len) {
   // TODO:
-  return false;
+	int n = packet[0] & 15;
+	int sum = 0;
+	for (int i = 0; i < n * 4; i+=2) {
+		sum += (packet[i] << 8) + packet[i + 1];
+		while (sum >> 16) {
+			//sum -= (1 << 16);
+			sum &= 0xffff;
+			sum += 1;
+		}
+	}
+	if (sum == 65535) {
+		int tmp = (packet[10] << 8) + packet[11];
+		//printf("%d\n", packet[10]);
+		//printf("%d\n", tmp);
+		packet[8]--;
+		tmp += 256;
+		// if (tmp >> 16)
+		// 	tmp -= 16;
+		while (tmp >> 16) {
+			tmp &= 0xffff;
+			tmp += 1;
+		}
+		// //printf("%d\n", tmp);
+		packet[10] = tmp >> 8;//
+		// //printf("%d\n", packet[10]);
+		packet[11] = tmp & 255;
+		if (packet[10] == 255 && packet[11] == 255) 
+			packet[10] = packet[11] = 0;
+
+		// sum = 0;
+		// for (int i = 0; i < n * 4; i+=2) {
+		// 	if (i == 10) continue;
+		// 	sum += (packet[i] << 8) + packet[i + 1];
+		// 	while (sum >> 16) {
+		// 		sum -= (1 << 16);
+		// 		sum += 1;
+		// 	}
+		// }
+		// int tmp = 65535 - sum;
+		// packet[10] = tmp >> 8;
+		// packet[11] = tmp & 255;
+
+
+		return true;
+	}
+	else return false;
 }

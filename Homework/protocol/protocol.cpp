@@ -1,7 +1,7 @@
 #include "rip.h"
 #include <stdint.h>
 #include <stdlib.h>
-
+#include <iostream>
 /*
   在头文件 rip.h 中定义了如下的结构体：
   #define RIP_MAX_ENTRY 25
@@ -45,7 +45,89 @@
  */
 bool disassemble(const uint8_t *packet, uint32_t len, RipPacket *output) {
   // TODO:
-  return false;
+  if (len != packet[3]) {
+printf("------error1\n");
+    return false;
+  }
+  for (int i = 28; i < len; i+=2) {
+    if (i == 28) {
+      if (packet[i] != 1 && packet[i] != 2) {
+printf("------error2\n");
+        
+        return false;
+      }
+      output->command = packet[i];
+      if (packet[i+1] != 2){
+printf("------error3\n");
+        return false;
+
+      }
+    } else if ((i == 30) && (packet[i] != 0 || packet[i+1] != 0)) {
+printf("------error4\n");
+      return false;
+    }
+    //printf("%x %x\n", packet[i], packet[i+1]);
+  }
+  output->numEntries = (len  - 32) / 20;
+  for (int i = 0; i < output->numEntries; i++) {
+    int begin = 32 + 20 * i;
+    int end = begin + 20;
+    for (int j = 0; j < 20; j+=2) {
+      int curr = begin+j;
+      if (j == 0) {
+        if ((output->command == 2 && packet[curr+1] != 2) || (output->command == 1 && packet[curr+1] != 0)){
+printf("------error5\n");
+          return false;
+
+        }
+        //output[i]->
+      } else if (j == 2) {
+        if (packet[curr] != 0 || packet[curr+1] != 0 ){
+
+printf("------error6\n");
+          return false;
+        }
+      } else if (j == 4) {
+        //printf("in addr: %x\n", packet[curr]);
+        output->entries[i].addr = (packet[curr]) + (packet[curr+1] << 8) + (packet[curr+2] << 16) + (packet[curr+3] << 24);
+        j += 2;
+        //output->entries[i].addr = ntohl(output->entries[i].addr);
+        //printf("%x\n", output->entries[i].addr);
+      } else if (j == 8) {
+        output->entries[i].mask = (packet[curr]) + (packet[curr+1] << 8) + (packet[curr+2] << 16) + (packet[curr+3] << 24);
+        j += 2;
+        int tmp = (packet[curr] << 24) + (packet[curr+1] << 16) + (packet[curr+2] << 8) + packet[curr+3];
+//printf("tmp:%x\n", tmp);
+        int flag = 0;
+        for (int k = 0; k < 32; k++) {
+          //printf("%d %d %d %d\n", k, flag, (tmp >> k), ((tmp >> k) % 2));
+          if (flag == 0 && ((tmp >> k) % 2) == 0) continue;
+          else if (flag == 0 && ((tmp >> k) % 2)) flag = 1;
+          else if (flag == 1 && (((tmp >> k) % 2) == 0)) 
+          {
+            printf("------------here\n");
+            printf("tmp::%x\n", tmp);
+          return false;
+
+          }
+        }
+      } else if (j == 12) {
+        output->entries[i].nexthop = (packet[curr]) + (packet[curr+1] << 8) + (packet[curr+2] << 16) + (packet[curr+3]<<24);
+        j += 2;
+      } else if (j == 16) {
+        output->entries[i].metric = (packet[curr]) + (packet[curr+1] << 8) + (packet[curr+2] << 16) + (packet[curr+3]<<24);
+        j += 2;
+        //printf("%x\n", output->entries[i].metric);
+        int tmp = (packet[curr] << 24) + (packet[curr+1] << 16) + (packet[curr+2] << 8) + packet[curr+3];
+        //printf("metric: %d", tmp);
+        if (tmp < 1 || tmp > 16){
+printf("------error7\n");
+          return false;
+        }
+      }
+    }
+  }
+  return true;
 }
 
 /**
@@ -60,5 +142,28 @@ bool disassemble(const uint8_t *packet, uint32_t len, RipPacket *output) {
  */
 uint32_t assemble(const RipPacket *rip, uint8_t *buffer) {
   // TODO:
-  return 0;
+  buffer[0] = rip->command;
+  buffer[1] = 2;
+  buffer[2] = buffer[3] = 0;
+  for (int i = 0; i < rip->numEntries; i++) {
+    int begin = 4 + i * 20;
+    buffer[begin] = 0;
+    if (buffer[0] == 2)
+      buffer[begin+1] = 2;
+    else buffer[begin+1] = 0;
+    buffer[begin+2] = buffer[begin+3] = 0;
+    for (int j = 0; j < 4; j++) {
+      buffer[begin+4+3-j] = rip->entries[i].addr >> (8 * (3-j));
+    }
+    for (int j = 0; j < 4; j++) {
+      buffer[begin+8+3-j] = rip->entries[i].mask >> (8 * (3-j));
+    }
+    for (int j = 0; j < 4; j++) {
+      buffer[begin+12+3-j] = rip->entries[i].nexthop >> (8 * (3-j));
+    }
+    for (int j = 0; j < 4; j++) {
+      buffer[begin+16+3-j] = rip->entries[i].metric >> (8 * (3-j));
+    }
+  }
+  return (4+20*rip->numEntries);
 }
