@@ -18,34 +18,35 @@ uint16_t convert(uint16_t x) {
     return result;
 }
 
-bool forward(uint8_t *packet, size_t len) {
-  // TODO:
-  uint32_t checkSum32 = 0;
-  uint16_t* pCheckSum = (uint16_t*)(packet + 10);
-  uint16_t realCheckSum = convert(*pCheckSum);
-  *pCheckSum = 0;
-  uint8_t IHL = (packet[0] & 0xf) * 2;
-  uint16_t* p = (uint16_t*)packet;
-  for (int i = 0; i < IHL; ++i, ++p) {
-      checkSum32 += convert(*p);
-  }
-  while (checkSum32 >> 16) {
-      uint32_t high = (checkSum32 >> 16);
-      checkSum32 &= 0xffff;
-      checkSum32 += high;
-  }
-  uint16_t checkSum = (uint16_t)(~checkSum32);
-  if (checkSum != realCheckSum) {
-    return false;
-  }
+bool forward(uint8_t* packet, size_t len) {
+    // TODO:
+    uint32_t checkSum32 = 0;
+    uint16_t* pCheckSum = (uint16_t*)(packet + 10);
+    uint16_t realCheckSum = convert(*pCheckSum);
+    *pCheckSum = 0;
+    uint8_t IHL = (packet[0] & 0xf) * 2;
+    uint16_t* p = (uint16_t*)packet;
+    for (int i = 0; i < IHL; ++i, ++p) {
+        checkSum32 += convert(*p);
+    }
+    while (checkSum32 >> 16) {
+        uint32_t high = (checkSum32 >> 16);
+        checkSum32 &= 0xffff;
+        checkSum32 += high;
+    }
+    uint16_t checkSum = (uint16_t)(~checkSum32);
+    if (checkSum != realCheckSum) {
+        return false;
+    }
 
-  uint8_t* pTTL = packet + 8;
-  *pTTL -= 1;
-  checkSum += 0x100;
-  if (checkSum == 0xffff) {
-    checkSum = 0;
-  }
-  *pCheckSum = convert(checkSum);
+    uint8_t* pTTL = packet + 8;
+    *pTTL -= 1;
+    uint32_t tmp32 = checkSum + 0x100;
+    checkSum = tmp32 + (tmp32 >> 16);
+    if (checkSum == 0xffff) {
+        checkSum = 0;
+    }
+    *pCheckSum = convert(checkSum);
 
-  return true;
+    return true;
 }

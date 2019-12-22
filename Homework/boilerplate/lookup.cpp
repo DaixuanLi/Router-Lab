@@ -24,9 +24,9 @@
 */
 
 MapTable map_table;
-RoutingTableEntry table[6000];
+RoutingTableEntry table[15000];
 int top = 0;
-bool hasEntry[6000];
+bool hasEntry[15000];
 
 /**
  * @brief 插入/删除一条路由表表项
@@ -46,6 +46,7 @@ void print_addr(uint32_t addr) {
 
 void print_table() {
   std::cout << "*****************************" << std::endl;
+  int size = 0;
   for (int i = 0; i < top; ++i) {
     if (hasEntry[i]) {
       if (table[i].nexthop == 0) {
@@ -58,10 +59,12 @@ void print_table() {
         print_addr(table[i].addr);
         std::cout << " via ";
         print_addr(table[i].nexthop); 
-        std::cout << " dev " << table[i].if_index << " " << "metric " << table[i].metric << std::endl;
+        std::cout << " dev " << table[i].if_index << " " << "metric " << table[i].metric << " len " << table[i].len << std::endl;
       }
+      ++size;
     }
   }
+  std::cout << "Total Size: " << size << " Top: " << top << std::endl;
   std::cout << "*****************************" << std::endl;
 }
 
@@ -79,7 +82,7 @@ void print_table2() {
       print_addr(entry.addr);
       std::cout << " via ";
       print_addr(entry.nexthop); 
-      std::cout << " dev " << entry.if_index << " " << "metric " << entry.metric << std::endl;
+      std::cout << " dev " << entry.if_index << " " << "metric " << entry.metric << " len: " << entry.len << std::endl;
     }
   }
   std::cout << "*****************************" << std::endl;
@@ -92,6 +95,7 @@ void update(bool insert, RoutingTableEntry &entry) {
     for (int i = 0 ; i < top; ++i) {
       if (hasEntry[i]) {
         if ((entry.addr == table[i].addr) && (entry.len == table[i].len)) {
+          // std::cout << "only update" << std::endl;
           table[i] = entry;
           return;
         }

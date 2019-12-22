@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <iostream>
 
 /*
   在头文件 rip.h 中定义了如下的结构体：
@@ -64,6 +65,7 @@ bool disassemble(const uint8_t *packet, uint32_t len, RipPacket *output) {
   uint8_t IHL = packet[0] & 0xf;
   uint16_t totalLength = *((uint16_t*)(packet + 2));
   if (ntohs(totalLength) > len) {
+    std::cout << "Total length large" << std::endl;
     return false;
   }
 
@@ -73,6 +75,7 @@ bool disassemble(const uint8_t *packet, uint32_t len, RipPacket *output) {
   uint8_t version = ripHeader[1];
   uint16_t zero = ripHeader_16[1];
   if ((version != 2) || (zero != 0)) {
+    std::cout << "Version or Zero failed" << std::endl;
     return false;
   }
   if (command == 1) {
@@ -83,14 +86,17 @@ bool disassemble(const uint8_t *packet, uint32_t len, RipPacket *output) {
     uint16_t family = data[0];
     uint16_t tag = data[1];
     if (!(family == 0) || !(tag == 0)) {
+      std::cout << "1 Family or tag" << std::endl;
       return false;
     }
     uint32_t metric = data_32[4];
     if (ntohl(metric) != 16) {
+      std::cout << "1 metric" << std::endl;
       return false;
     }
     uint32_t mask = data_32[2];
     if (!checkMask(ntohl(mask))) {
+      std::cout << "1 mask" << std::endl;
       return false;
     }
     makeEntry(output->entries, data_32[1], mask, data_32[3], metric);
@@ -105,15 +111,19 @@ bool disassemble(const uint8_t *packet, uint32_t len, RipPacket *output) {
       uint16_t family = data[0];
       uint16_t tag = data[1];
       if (!(ntohs(family) == 2) || !(tag == 0)) {
-        return false;
+          std::cout << "2 Family or tag" << std::endl;
+          return false;
       }
       uint32_t metric = data_32[4];
       if ((ntohl(metric) < 1) || (ntohl(metric) > 16)) {
-        return false;
+          std::cout << "2 metric" << std::endl;
+
+          return false;
       }
       uint32_t mask = data_32[2];
       if (!checkMask(ntohl(mask))) {
-        return false;
+          std::cout << "2 mask" << std::endl;
+          return false;
       }
       makeEntry(output->entries + output->numEntries, data_32[1], mask, data_32[3], metric);
       data += 10;
@@ -123,6 +133,7 @@ bool disassemble(const uint8_t *packet, uint32_t len, RipPacket *output) {
     }
   }
   else {
+    std::cout << "command error" << std::endl;
     return false;
   }
   return true;

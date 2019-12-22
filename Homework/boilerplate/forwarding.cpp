@@ -41,7 +41,8 @@ bool forward(uint8_t *packet, size_t len) {
 
   uint8_t* pTTL = packet + 8;
   *pTTL -= 1;
-  checkSum += 0x100;
+  uint32_t tmp32 = checkSum + 0x100;
+  checkSum = tmp32 + (tmp32 >> 16);
   if (checkSum == 0xffff) {
     checkSum = 0;
   }
