@@ -19,11 +19,11 @@ exe = prefix
 if len(sys.argv) > 1:
     exe = sys.argv[1]
 
-try:
-    import pyshark
-except Exception:
-    print('Install pyshark (pip3 install pyshark) first!')
-    sys.exit(1)
+#try:
+import pyshark
+#except Exception:
+    #print('Install pyshark (pip3 install pyshark) first!')
+    #sys.exit(1)
 
 def write_grade(grade, total):
     data = {}

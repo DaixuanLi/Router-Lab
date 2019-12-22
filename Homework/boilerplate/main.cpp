@@ -4,12 +4,13 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <arpa/inet.h>
 #include <string.h>
 #include <list>
-
+#include <vector>
 #define BROADCAST_ADDR 0x090000e0
 typedef uint32_t in_addr_t;
-typedef std::list<RoutingTableEntry> ROUTINGLIST;
+typedef std::vector<RoutingTableEntry> ROUTINGLIST;
 extern ROUTINGLIST RoutingList;
 
 extern bool validateIPChecksum(uint8_t *packet, size_t len);
@@ -17,6 +18,8 @@ extern uint16_t calculateIPChecksum(uint8_t *packet, size_t len);
 extern void update(bool insert, RoutingTableEntry entry);
 extern bool query(uint32_t addr, uint32_t *nexthop, uint32_t *if_index);
 extern bool query(uint32_t addr, uint32_t *nexthop, uint32_t *if_index, uint32_t *metric);
+extern bool query_percise(uint32_t addr,uint32_t len, uint32_t *nexthop, uint32_t *if_index, uint32_t *metric);
+extern bool query_percise(uint32_t addr,uint32_t len, uint32_t *nexthop, uint32_t *if_index);
 extern bool forward(uint8_t *packet, size_t len);
 extern bool disassemble(const uint8_t *packet, uint32_t len, RipPacket *output);
 extern uint32_t assemble(const RipPacket *rip, uint8_t *buffer);
@@ -29,33 +32,33 @@ void printRoutingTable() {
 			      printf("nexthop: %u.%u.%u.%u  ", (uint8_t)e.nexthop, (uint8_t)(e.nexthop>>8), (uint8_t)(e.nexthop>>16), (uint8_t)(e.nexthop>>24));
 				    printf("metric: %u\n", e.metric);
 		}
+	    printf("\n****************\nsize:%d\n",RoutingList.size());
 }
 
 uint32_t mask2len(uint32_t mask)
 {
+  mask = ntohl(mask);
   int i = 0;
   for (; i < 32; i++)
   {
-    if ((mask & (1 << i)) == 0)
+    if ((mask & (1 << i)) != 0)
     {
       break;
     }
   }
-  return i;
+  return 32 - i;
 }
 
 uint32_t len2mask(uint32_t len)
 {
   uint32_t mask = 0;
-  for (int i = 0; i < len; i++)
-  {
-    mask |= (1 << i);
-  }
+  mask = (~0) << (32 - len);
   //printf("calcmask,len=%ud:%x\n",len,mask);
-  return mask;
+  return htonl(mask);
 }
 
 void printRipPacket(RipPacket p) {
+ /* 
 	  printf("=== receive rip packet ===\n");
     printf("command:%u,num:%u\n",p.command,p.numEntries);
 	    for (int i = 0;i<p.numEntries;i++) {
@@ -63,7 +66,7 @@ void printRipPacket(RipPacket p) {
 			      printf("nexthop: %u.%u.%u.%u  ", (uint8_t)p.entries[i].nexthop, (uint8_t)(p.entries[i].nexthop>>8), (uint8_t)(p.entries[i].nexthop>>16), (uint8_t)(p.entries[i].nexthop>>24));
 			      printf("metric: %u\n", p.entries[i].metric);
             printf("~~~~~~~~~~~~~~");
-		}
+		}*/
 }
 
 RoutingTableEntry *RipEntry2RoutingTableEntry(RipEntry in,uint32_t _nexthop,uint32_t _if_index) {
@@ -126,7 +129,7 @@ uint8_t output[2048];
 // 2: 10.0.2.1
 // 3: 10.0.3.1
 // 你可以按需进行修改，注意端序
-in_addr_t addrs[N_IFACE_ON_BOARD] = {0x0203a8c0, 0x0104a8c0, 0x0102000a, 0x0103000a};
+in_addr_t addrs[N_IFACE_ON_BOARD] = {0x0101a8c0, 0x0103a8c0, 0x0102a8c0, 0x0000000a};
 
 int main(int argc, char *argv[])
 {
@@ -157,20 +160,25 @@ int main(int argc, char *argv[])
   while (1)
   {
     uint64_t time = HAL_GetTicks();
-    if (time > last_time + 30 * 1000)
+    if (time > last_time + 5 * 1000)
     {
       // What to do? send Rip Response.
       printf("Timer\n");
+      last_time = time;
       printRoutingTable();
       RipPacket *pkg2send = new RipPacket();
       pkg2send->command = 2;
       pkg2send->numEntries = 0;
       for (uint32_t i = 0; i < N_IFACE_ON_BOARD; i++)
       {
+	int send_num = 0;
+	int count = 0;
         for (auto it = RoutingList.begin(); it != RoutingList.end(); it++)
         {
+	  //printf("%d : %d sum = %d\n",count++,pkg2send->numEntries,send_num);
           if (pkg2send->numEntries == 25)
           {
+	    send_num += 25;
             // printf("send rip:\n");
             // printRipPacket(*pkg2send);
             uint32_t len = assemble(pkg2send, &output[28]);
@@ -186,23 +194,25 @@ int main(int argc, char *argv[])
             pkg2send->numEntries = 0;
           }
           RipEntry *insert = RoutingEntry2RipEntry(*it);
-
+        
           if (insert->addr == addrs[i])
           {
             continue;
           }
-          if (isMatch(insert->addr, (*it).len, addrs[i]))
+          if ((*it).if_index == i)
           {
             continue;
           }
           // poison reverse
-          if (isMatch(insert->nexthop, (*it).len, addrs[i]))
+          /*if (isMatch(insert->nexthop, (*it).len, addrs[i]))
           {
             continue;
             //insert->metric = 16;
-          }
+          }*/
           pkg2send->entries[pkg2send->numEntries++] = *insert;
         }
+        send_num += pkg2send->numEntries;
+	//printf("\n*******************\nport= %d,send num = %d\n",i,send_num);
         //printf("send rip:\n");
         //printRipPacket(*pkg2send);
         uint32_t len = assemble(pkg2send, &output[28]);
@@ -230,7 +240,7 @@ int main(int argc, char *argv[])
     int if_index;
     res = HAL_ReceiveIPPacket(mask, packet, sizeof(packet), src_mac, dst_mac,
                               1000, &if_index);
-    printf("receive packet check:\n");
+    //printf("receive packet from %u check:\n",if_index);
     if (res == HAL_ERR_EOF) {
       printf("bad receive.");
       break;
@@ -275,11 +285,11 @@ int main(int argc, char *argv[])
     // TODO: Handle rip multicast address(224.0.0.9)?
     if(dst_addr == BROADCAST_ADDR){
       // TODO: RIP?
-      printf("broadcast received.\n");
+      //printf("find broadcast received.\n");
       RipPacket rip;
       if (disassemble(packet, res, &rip))
       {
-	      printf("validate broadcast.\n");
+	      //printf("validate broadcast.\n");
         printRipPacket(rip);
         if (rip.command == 1)
         {
@@ -302,15 +312,16 @@ int main(int argc, char *argv[])
             {
               continue;
             }
-            if (isMatch(insert->addr, (*it).len, src_addr))
+            if ((*it).if_index == if_index)
             {
               continue;
             }
+	    /*
             // poison reverse
             if (isMatch(insert->nexthop, (*it).len, src_addr))
             {
               insert->metric = 16;
-            }
+            }*/
             pkg2send->entries[pkg2send->numEntries++] = *insert;
           }
           uint32_t len = assemble(pkg2send, &output[28]);
@@ -321,28 +332,29 @@ int main(int argc, char *argv[])
         }
         else
         {
-          printf("response.\n");
+          //printf("response.\n");
           // response
           // TODO: use query and update
           uint32_t nexthop1;
           uint32_t if_index1;
           uint32_t metric1;
           for(int i = 0;i<rip.numEntries;i++) {
-            printf("check entry %d\n",i);
-            if(query(rip.entries[i].addr, &nexthop1, &if_index1,&metric1)) {
-              printf("exist!");
-              if(rip.entries[i].metric + 1 <= metric1) {
+            //printf("check entry %d\n",mask2len(rip.entries[i].mask));
+            if(query_percise(rip.entries[i].addr,mask2len(rip.entries[i].mask), &nexthop1, &if_index1,&metric1)) {
+              //printf("exist!");
+              if(rip.entries[i].metric + 1 < metric1) {
                 rip.entries[i].metric += 1;
                 update(true, *RipEntry2RoutingTableEntry((rip.entries[i]),src_addr,if_index));
-                printf("update!");
+                //printf("update!");
               } else if (rip.entries[i].metric + 1 > 16) {
                 //update(false, *RipEntry2RoutingTableEntry((rip.entries[i]),src_addr));
-                printf("delete!");
+                //printf("delete!");
               }
             }
 	          else{
+              //printf("1 not exist!");
               if (rip.entries[i].metric + 1 <= 16) {
-		            printf("insert rip metric:%d",rip.entries[i].metric);
+		            //printf("insert rip metric:%d",rip.entries[i].metric);
 		            rip.entries[i].metric += 1;
 	              update(true, *RipEntry2RoutingTableEntry((rip.entries[i]),src_addr,if_index));
               }
@@ -356,12 +368,12 @@ int main(int argc, char *argv[])
     if (dst_is_me)
     {
       // TODO: RIP?
-      printf("broadcast received.\n");
+      //printf("me dest broadcast received.\n");
       RipPacket rip;
       if (disassemble(packet, res, &rip))
       {
-	      printf("validate broadcast.\n");
-        printRipPacket(rip);
+	      //printf("validate broadcast.\n");
+        //printRipPacket(rip);
         if (rip.command == 1)
         {
           // request
@@ -402,28 +414,29 @@ int main(int argc, char *argv[])
         }
         else
         {
-          printf("response.\n");
+          //printf("response.\n");
           // response
           // TODO: use query and update
           uint32_t nexthop1;
           uint32_t if_index1;
           uint32_t metric1;
           for(int i = 0;i<rip.numEntries;i++) {
-            printf("check entry %d\n",i);
-            if(query(rip.entries[i].addr, &nexthop1, &if_index1,&metric1)) {
-              printf("exist!");
-              if(rip.entries[i].metric + 1 <= metric1) {
+            //printf("check entry %d\n",mask2len(rip.entries[i].mask));
+            if(query_percise(rip.entries[i].addr, mask2len(rip.entries[i].mask),&nexthop1, &if_index1,&metric1)) {
+              //printf("exist!");
+              if(rip.entries[i].metric + 1 < metric1) {
                 rip.entries[i].metric += 1;
                 update(true, *RipEntry2RoutingTableEntry((rip.entries[i]),src_addr,if_index));
-                printf("update!");
+                //printf("update!");
               } else if (rip.entries[i].metric + 1 > 16) {
                 update(false, *RipEntry2RoutingTableEntry((rip.entries[i]),src_addr,if_index));
-                printf("delete!");
+                //printf("delete!");
               }
             }
 	          else{
+              //printf("2 not exist!");
               if (rip.entries[i].metric + 1 <= 16) {
-		            printf("insert rip metric:%d",rip.entries[i].metric);
+		            //printf("insert rip metric:%d",rip.entries[i].metric);
 		            rip.entries[i].metric += 1;
 	              update(true, *RipEntry2RoutingTableEntry((rip.entries[i]),src_addr,if_index));
               }
@@ -468,7 +481,7 @@ int main(int argc, char *argv[])
       } else {
         // not found
         // optionally you can send ICMP Host Unreachable
-        printf("IP not found for %x\n", src_addr);
+        //printf("IP not found for %x\n", src_addr);
       }
     }
   }

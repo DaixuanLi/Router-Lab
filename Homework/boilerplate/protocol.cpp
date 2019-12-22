@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <iostream>
+#include <arpa/inet.h>
 using namespace std;
 /*
   在头文件 rip.h 中定义了如下的结构体：
@@ -46,14 +47,14 @@ bool testMask(uint32_t mask)
   int i = 0;
   for (; i < 32; i++)
   {
-    if ((mask & (1 << i)) == 0)
+    if ((mask & (1 << i)) == 1)
     {
       break;
     }
   }
   for (; i < 32; i++)
   {
-    if ((mask & (1 << i)) != 0)
+    if ((mask & (1 << i)) != 1)
     {
       return false;
     }
@@ -86,25 +87,26 @@ void set_reverse(const uint32_t from, uint8_t &to1, uint8_t &to2, uint8_t &to3, 
 bool disassemble(const uint8_t *packet, uint32_t len, RipPacket *output)
 {
   // TODO:
-  printf("Disass Debug:len is %u\n",len);
-  for(int i = 0;i < len;i++){
+  //printf("Disass Debug:len is %u\n",len);
+  //for(int i = 0;i < len;i++){
     // std::string a = "";
     // for(int j = 0;j < 8;j++){
     //   a += ((unsigned(packet[i]) & (1 << (7-j))) == 0) ? "0":"1";
     // }
-    if(i % 8 == 0){
-      printf("\n");
-    }
-    printf("%x ",packet[i]);
+    //if(i % 8 == 0){
+    //  printf("\n");
+   // }
+    //printf("%x ",packet[i]);
     
-  }
-  if (len < 20)
-  {
-    return false;
-  }
+  //}
+  //if (len < 20)
+  //{
+  //  return false;
+  //}
   uint32_t iplen = (((uint32_t)packet[2]) << 8) + ((uint32_t)packet[3]);
   if (iplen != len)
   {
+    printf("!!!0");
     return false;
   }
   uint32_t ipheadlen = ((uint32_t)(packet[0] & 0x0f));
@@ -112,19 +114,19 @@ bool disassemble(const uint8_t *packet, uint32_t len, RipPacket *output)
   uint32_t ripbegin = ipheadlen + 8;
   if (len < ripbegin + 4)
   {
-    //printf("1");
+    printf("!!!1");
     return false;
   }
   uint32_t riplen = len - ripbegin;
   if ((riplen - 4) % 20 != 0 || riplen - 4 == 0)
   {
-    //printf("2");
+    printf("!!!2");
     return false;
   }
   // version && zero
   if (packet[ripbegin + 1] != 2 || packet[ripbegin + 2] != 0 || packet[ripbegin + 3] != 0)
   {
-    //printf("3");
+    printf("!!!3");
     return false;
   }
   // command
@@ -134,7 +136,7 @@ bool disassemble(const uint8_t *packet, uint32_t len, RipPacket *output)
     uint32_t ripnum = (riplen - 4) / 20;
     if (ripnum > 25)
     {
-      //printf("4");
+      printf("!!!4");
       return false;
     }
     ans->numEntries = ripnum;
@@ -144,12 +146,12 @@ bool disassemble(const uint8_t *packet, uint32_t len, RipPacket *output)
       uint32_t thisBegin = ripbegin + 4 + 20 * i;
       if (packet[thisBegin] != 0 || packet[thisBegin + 1] != 0)
       {
-        //printf("5");
+        printf("!!!5");
         return false;
       }
       if (join8(packet[thisBegin + 2], packet[thisBegin + 3]) != 0)
       {
-        //printf("6");
+        printf("!!!6");
         return false;
       }
       RipEntry newEntry;
@@ -158,14 +160,15 @@ bool disassemble(const uint8_t *packet, uint32_t len, RipPacket *output)
       newEntry.nexthop = join8(packet[thisBegin + 15], packet[thisBegin + 14], packet[thisBegin + 13], packet[thisBegin + 12]);
       newEntry.metric = join8(packet[thisBegin + 16], packet[thisBegin + 17], packet[thisBegin + 18], packet[thisBegin + 19]);
       uint32_t testMet = join8(packet[thisBegin + 16], packet[thisBegin + 17], packet[thisBegin + 18], packet[thisBegin + 19]);
-      if (!testMask(newEntry.mask))
+      uint32_t _testmask = join8(packet[thisBegin + 8], packet[thisBegin + 9], packet[thisBegin + 10], packet[thisBegin + 11]);
+      if (!testMask(_testmask))
       {
-        //printf("7");
+        printf("!!!7");
         return false;
       }
       if (testMet != 16)
       {
-        //printf("8");
+        printf("!!!8");
         return false;
       }
       ans->entries[i] = newEntry;
@@ -176,7 +179,7 @@ bool disassemble(const uint8_t *packet, uint32_t len, RipPacket *output)
     uint32_t ripnum = (riplen - 4) / 20;
     if (ripnum > 25)
     {
-      //printf("9");
+      printf("!!!9");
       return false;
     }
     ans->numEntries = ripnum;
@@ -191,12 +194,12 @@ bool disassemble(const uint8_t *packet, uint32_t len, RipPacket *output)
       // cout << "print rip finished." << endl;
       if (packet[thisBegin] != 0 || packet[thisBegin + 1] != 2)
       {
-        //printf("10");
+        printf("!!!10");
         return false;
       }
       if (join8(packet[thisBegin + 2], packet[thisBegin + 3]) != 0)
       {
-        //printf("11");
+        printf("!!!11");
         return false;
       }
       RipEntry newEntry;
@@ -205,14 +208,15 @@ bool disassemble(const uint8_t *packet, uint32_t len, RipPacket *output)
       newEntry.nexthop = join8(packet[thisBegin + 15], packet[thisBegin + 14], packet[thisBegin + 13], packet[thisBegin + 12]);
       newEntry.metric = join8(packet[thisBegin + 16], packet[thisBegin + 17], packet[thisBegin + 18], packet[thisBegin + 19]);
       uint32_t testMet = join8(packet[thisBegin + 16], packet[thisBegin + 17], packet[thisBegin + 18], packet[thisBegin + 19]);
-      if (!testMask(newEntry.mask))
+      uint32_t _testmask = join8(packet[thisBegin + 8], packet[thisBegin + 9], packet[thisBegin + 10], packet[thisBegin + 11]);
+      if (!testMask(_testmask))
       {
-        //printf("12");
+        printf("!!!12");
         return false;
       }
       if (testMet == 0 || testMet > 16)
       {
-        //printf("13");
+        printf("!!!13");
         return false;
       }
       ans->entries[i] = newEntry;
@@ -221,7 +225,7 @@ bool disassemble(const uint8_t *packet, uint32_t len, RipPacket *output)
   else
   {
 
-    //printf("14");
+    printf("!!!14");
     return false;
   }
   *output = *ans;

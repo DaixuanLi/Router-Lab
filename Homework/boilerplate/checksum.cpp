@@ -57,6 +57,8 @@ bool validateIPChecksum(uint8_t *packet, size_t len) {
   if(len < 20){
     return false;
   }
+  uint8_t a = packet[10];
+  uint8_t b = packet[11];
   Checksum_checker checksum_right(packet[10],packet[11]);
   packet[10] = 0;
   packet[11] = 0;
@@ -81,6 +83,8 @@ bool validateIPChecksum(uint8_t *packet, size_t len) {
     //cout << checksum_test.print() << " is result." << endl;
     delete adder;
   }
+  packet[10] = a;
+  packet[11] = b;
   if (checksum_test.value + checksum_right.value == 0xffff){
     return true;
   }

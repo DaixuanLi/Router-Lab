@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 class Checksum_checker {
 public:
@@ -37,16 +38,15 @@ public:
  */
 bool forward(uint8_t *packet, size_t len) {
   // TODO:
-  if(len < 20){
-    return false;
-  }
   Checksum_checker checksum_right(packet[10],packet[11]);
+  Checksum_checker checksum_cache(packet[10],packet[11]);
   packet[10] = 0;
   packet[11] = 0;
   uint8_t head_length = packet[0] & 0x0f;
-  if(len < (size_t)(head_length << 2)){
+  /*if(len < (size_t)(head_length << 2)){
     return false;
-  }
+  }*/
+  //printf("in fowarding \n");
   Checksum_checker checksum_test(0,0);
   Checksum_checker *adder;
   for(uint8_t i = 0;i<head_length;i++){
@@ -58,9 +58,12 @@ bool forward(uint8_t *packet, size_t len) {
     delete adder;
   }
   if (!(checksum_test.value + checksum_right.value == 0xffff)){
+    //printf("checksum failed.\n");
     return false;
   }
+  //printf("in fowarding: before ttl \n",packet[8]);
   packet[8] -= 1;
+  //printf("in fowarding: after ttl %u \n",packet[8]);
   Checksum_checker checksum_test1(0,0);
   Checksum_checker *adder1;
   for(uint8_t i = 0;i<head_length;i++){
@@ -72,7 +75,14 @@ bool forward(uint8_t *packet, size_t len) {
     delete adder1;
   }
   uint16_t ans = 0xffff - checksum_test1.value;
-  packet[10] = (ans & 0xff00) >> 8;
-  packet[11] = ans & 0x00ff;
+  checksum_cache.value = checksum_cache.add_with_overflow(checksum_cache.value,0x100);
+  if(checksum_cache.value == 0xffff) {
+    checksum_cache.value = 0;
+  }
+  //printf("--------------- %x %x\n",checksum_cache.value,ans);
+  packet[10] = (checksum_cache.value & 0xff00) >> 8;
+  packet[11] = checksum_cache.value & 0x00ff;
+  //printf("in fowarding: checksum calc %u %u",packet[8]);
   return true;
 }
+
